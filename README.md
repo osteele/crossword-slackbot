@@ -1,5 +1,12 @@
 # Crossword Slackbot
 
+![GitHub Actions](https://github.com/osteele/crossword-slackbot/actions/workflows/crossword-bot.yml/badge.svg)
+![Bun](https://img.shields.io/badge/bun-latest-black?logo=bun)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+<img src="docs/mascot.heic" alt="Crossword Slackbot mascot" width="150" align="right">
+
 A Slackbot that automatically adds date header messages to the #crossword channel. The bot looks back one week and adds messages like "--- Mon 9/29 ---" for each day where nobody has posted their crossword time, ending on the previous Sunday.
 
 ## Why?
