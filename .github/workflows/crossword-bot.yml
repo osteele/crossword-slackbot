@@ -1,0 +1,41 @@
+name: Crossword Date Separator Bot
+
+on:
+  schedule:
+    # Run daily at 8 PM ET (midnight UTC in winter, 1 AM UTC in summer)
+    # Adjust this cron expression to match your preferred time
+    - cron: '0 0 * * *'  # Midnight UTC daily
+
+  workflow_dispatch:  # Allow manual triggering for testing
+
+jobs:
+  post-date-separators:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run crossword bot
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+        run: bun run index.ts --create-back 0 --create-forward 1
+
+      - name: Report completion
+        if: success()
+        run: echo "Bot executed successfully"
+
+      - name: Report failure
+        if: failure()
+        run: |
+          echo "Bot execution failed - check logs above"
+          exit 1
