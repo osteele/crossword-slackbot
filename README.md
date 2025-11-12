@@ -77,6 +77,8 @@ In Slack, add the bot to your #crossword channel:
 1. Type `/add` in the channel
 2. Choose the app "Crossword Date Bot" (or whatever you named your app) from the UI
 
+**Note**: This bot only works with **public channels**. The configured scopes (`channels:history`, `channels:read`) only allow access to public channels. If your crossword channel is private, you'll need to make it public or see `docs/IDEAS.md` for information about adding private channel support.
+
 ### 3. Configure Environment Variables
 
 Copy the example environment file and add your token:

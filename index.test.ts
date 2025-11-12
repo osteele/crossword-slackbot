@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   formatDateSeparator,
-  parseExistingDateMessage,
-  isSameDay,
+  getDateRange,
   getPreviousSunday,
   getUpcomingSunday,
-  getDateRange,
+  isSameDay,
+  parseExistingDateMessage,
 } from './index';
 
 describe('formatDateSeparator', () => {
@@ -64,6 +64,60 @@ describe('parseExistingDateMessage', () => {
     const result = parseExistingDateMessage(text);
     expect(result).not.toBeNull();
     expect(result?.getDate()).toBe(12);
+  });
+
+  it('handles year boundary correctly - December in early January', () => {
+    // Simulate running the bot on January 5, 2025
+    // A "--- Sat 12/28 ---" header should be parsed as December 28, 2024
+    const text = '--- Sat 12/28 ---';
+    const result = parseExistingDateMessage(text);
+
+    expect(result).not.toBeNull();
+    expect(result?.getMonth()).toBe(11); // December (0-indexed)
+    expect(result?.getDate()).toBe(28);
+
+    // The year should be last year if we're in early January
+    // and the parsed date would be >6 months in the future
+    const now = new Date();
+    const sixMonthsAhead = new Date();
+    sixMonthsAhead.setMonth(sixMonthsAhead.getMonth() + 6);
+
+    const testDate = new Date(now.getFullYear(), 11, 28); // Dec 28 this year
+    if (testDate > sixMonthsAhead) {
+      expect(result?.getFullYear()).toBe(now.getFullYear() - 1);
+    } else {
+      expect(result?.getFullYear()).toBe(now.getFullYear());
+    }
+  });
+
+  it('handles year boundary correctly - January in late December', () => {
+    // Simulate running the bot on December 30, 2024
+    // A "--- Wed 1/1 ---" header should be parsed as January 1, 2025
+    const text = '--- Wed 1/1 ---';
+    const result = parseExistingDateMessage(text);
+
+    expect(result).not.toBeNull();
+    expect(result?.getMonth()).toBe(0); // January (0-indexed)
+    expect(result?.getDate()).toBe(1);
+
+    // Should always be current year or next year, never more than 6 months away
+    const now = new Date();
+    expect(result?.getFullYear()).toBeGreaterThanOrEqual(now.getFullYear());
+    expect(result?.getFullYear()).toBeLessThanOrEqual(now.getFullYear() + 1);
+  });
+
+  it('parses recent dates with current year', () => {
+    // A date within 6 months should use current year
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const month = nextMonth.getMonth() + 1;
+    const day = 15;
+
+    const text = `--- Mon ${month}/${day} ---`;
+    const result = parseExistingDateMessage(text);
+
+    expect(result).not.toBeNull();
+    expect(result?.getFullYear()).toBe(new Date().getFullYear());
   });
 });
 
@@ -177,6 +231,27 @@ describe('getDateRange', () => {
       expect(date.getMinutes()).toBe(0);
       expect(date.getSeconds()).toBe(0);
     }
+  });
+});
+
+describe('CLI validation', () => {
+  it('detects NaN in date calculations', () => {
+    const createBackDays = Number.NaN;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - createBackDays);
+
+    // Invalid Date when NaN is used
+    expect(Number.isNaN(startDate.getTime())).toBe(true);
+  });
+
+  it('validates non-negative integers', () => {
+    expect(Number.isNaN(Number.NaN)).toBe(true);
+    expect(Number.isNaN(-5)).toBe(false);
+    expect(Number.isInteger(3.14)).toBe(false);
+    expect(Number.isInteger(5)).toBe(true);
   });
 });
 

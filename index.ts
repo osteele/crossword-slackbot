@@ -3,9 +3,23 @@ import parseArgs from 'minimist';
 
 const argv = parseArgs(process.argv.slice(2));
 const isDryRun = argv['dry-run'] || false;
-const lookbackDays = parseInt(argv['lookback'] ?? '30', 10);
+const lookbackDays = parseInt(argv.lookback ?? '30', 10);
 const createBackDays = parseInt(argv['create-back'] ?? '7', 10);
 const createForwardDays = parseInt(argv['create-forward'] ?? '7', 10);
+
+// Validate numeric CLI arguments
+function validatePositiveInt(value: number, name: string): void {
+  if (Number.isNaN(value) || value < 0 || !Number.isInteger(value)) {
+    console.error(
+      `Error: --${name} must be a non-negative integer, got: ${argv[name] ?? 'undefined'}`
+    );
+    process.exit(1);
+  }
+}
+
+validatePositiveInt(lookbackDays, 'lookback');
+validatePositiveInt(createBackDays, 'create-back');
+validatePositiveInt(createForwardDays, 'create-forward');
 
 const token = process.env.SLACK_BOT_TOKEN;
 const channelName = process.env.SLACK_CHANNEL || 'crossword';
@@ -60,10 +74,19 @@ function parseExistingDateMessage(text: string): Date | null {
   const day = parseInt(match[2], 10);
   const currentYear = new Date().getFullYear();
 
-  const date = new Date(currentYear, month - 1, day);
+  let date = new Date(currentYear, month - 1, day);
 
+  // Validate the date (e.g., Feb 30 becomes Mar 2)
   if (date.getMonth() !== month - 1) {
     return null;
+  }
+
+  // Handle year boundary: if parsed date is >6 months in the future,
+  // assume it's from last year (e.g., parsing "Dec 28" in early January)
+  const sixMonthsFromNow = new Date();
+  sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+  if (date > sixMonthsFromNow) {
+    date = new Date(currentYear - 1, month - 1, day);
   }
 
   return date;
@@ -125,13 +148,25 @@ function getDateRange(): Date[] {
 
 async function findChannelId(channelName: string): Promise<string | null> {
   try {
-    const result = await client.conversations.list({
-      types: 'public_channel',
-    });
+    const targetName = channelName.replace('#', '');
+    let cursor: string | undefined;
 
-    const channel = result.channels?.find((ch) => ch.name === channelName.replace('#', ''));
+    do {
+      const result = await client.conversations.list({
+        types: 'public_channel',
+        cursor,
+        limit: 200,
+      });
 
-    return channel?.id || null;
+      const channel = result.channels?.find((ch) => ch.name === targetName);
+      if (channel?.id) {
+        return channel.id;
+      }
+
+      cursor = result.response_metadata?.next_cursor;
+    } while (cursor);
+
+    return null;
   } catch (error) {
     console.error('Error finding channel:', error);
     return null;
@@ -166,7 +201,10 @@ async function getChannelMessages(channelId: string, oneWeekAgo: Date): Promise<
   }
 }
 
-async function findMostRecentDateHeader(channelId: string, lookbackDays: number): Promise<Date | null> {
+async function findMostRecentDateHeader(
+  channelId: string,
+  lookbackDays: number
+): Promise<Date | null> {
   const lookbackDate = new Date();
   lookbackDate.setDate(lookbackDate.getDate() - lookbackDays);
 
@@ -218,7 +256,9 @@ async function addMissingDateSeparators(): Promise<void> {
   }
 
   console.log(`Found channel: ${channelName} (${channelId})`);
-  console.log(`CLI options: lookback=${lookbackDays}, create-back=${createBackDays}, create-forward=${createForwardDays}`);
+  console.log(
+    `CLI options: lookback=${lookbackDays}, create-back=${createBackDays}, create-forward=${createForwardDays}`
+  );
 
   // Find the most recent date header
   const mostRecentHeader = await findMostRecentDateHeader(channelId, lookbackDays);
@@ -227,11 +267,28 @@ async function addMissingDateSeparators(): Promise<void> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const startDate = new Date(today);
+  let startDate = new Date(today);
   startDate.setDate(startDate.getDate() - createBackDays);
 
   const endDate = new Date(today);
   endDate.setDate(endDate.getDate() + createForwardDays);
+
+  // If we found a recent header, start from the day after it (to avoid backfilling)
+  if (mostRecentHeader) {
+    console.log(`Most recent date header found: ${formatDateSeparator(mostRecentHeader)}`);
+
+    // Only adjust start date if the most recent header is within our intended range
+    if (mostRecentHeader >= startDate && mostRecentHeader < endDate) {
+      const dayAfterMostRecent = new Date(mostRecentHeader);
+      dayAfterMostRecent.setDate(dayAfterMostRecent.getDate() + 1);
+      startDate = dayAfterMostRecent;
+      console.log(
+        `Adjusting start date to avoid backfilling: starting from ${formatDateSeparator(startDate)}`
+      );
+    }
+  } else {
+    console.log(`No recent date headers found in the past ${lookbackDays} days`);
+  }
 
   // Generate all dates in the range
   const dateRange: Date[] = [];
@@ -241,13 +298,9 @@ async function addMissingDateSeparators(): Promise<void> {
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
-  if (mostRecentHeader) {
-    console.log(`Most recent date header found: ${formatDateSeparator(mostRecentHeader)}`);
-  } else {
-    console.log(`No recent date headers found in the past ${lookbackDays} days`);
-  }
-
-  console.log(`Checking dates from ${startDate.toDateString()} to ${endDate.toDateString()} (${dateRange.length} days)`);
+  console.log(
+    `Checking dates from ${startDate.toDateString()} to ${endDate.toDateString()} (${dateRange.length} days)`
+  );
 
   const messages = await getChannelMessages(channelId, startDate);
   console.log(`Found ${messages.length} messages in date range`);
