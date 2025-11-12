@@ -7,7 +7,9 @@
   "private": true,
   "scripts": {
     "start": "bun run index.ts",
+    "bot": "bun run bot.ts",
     "dev": "bun run --watch index.ts",
+    "dev:bot": "bun run --watch bot.ts",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",

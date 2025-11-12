@@ -68,6 +68,7 @@ People post their completion times as replies to each day's header message.
    - `channels:history` - View messages in public channels
    - `channels:read` - View basic channel info
    - `chat:write` - Send messages
+   - `users:read` - View user names (required for leaderboard and summary features)
 7. Install the app to your workspace
 8. Copy the "Bot User OAuth Token" (starts with `xoxb-`)
 
@@ -101,13 +102,40 @@ bun install
 
 ## Usage
 
-Run the bot manually:
+The bot has two modes:
+
+### Background Mode (Date Headers)
+
+Run the bot manually to create date headers:
 
 ```bash
 bun run index.ts
 ```
 
 By default, the bot will create date headers for the past 7 days and the next 7 days.
+
+### Interactive Mode (Mentions)
+
+Run the bot to respond to @mentions in Slack:
+
+```bash
+bun run bot.ts
+```
+
+Users can then interact with the bot by mentioning it:
+- `@bot leaderboard` - Show this week's top 5 fastest times with 🥇🥈🥉
+- `@bot summary` or `@bot report` - Weekly summary with stats and trends
+- `@bot help` - List available commands
+
+**Required additional setup for interactive mode:**
+1. Add the `app_mentions:read` scope in your Slack app settings (OAuth & Permissions)
+2. Add a signing secret to your `.env`:
+   ```bash
+   SLACK_SIGNING_SECRET=your-signing-secret-here
+   ```
+   (Find this in your Slack app settings under "Basic Information" → "App Credentials")
+3. Reinstall the app to grant the new permission
+4. The bot listens on port 3000 by default (set `PORT` environment variable to change)
 
 ### CLI Options
 
@@ -116,6 +144,8 @@ bun run index.ts [options]
 
 Options:
   --dry-run              Don't post messages, just show what would be posted
+  --test-leaderboard     Test leaderboard generation with real Slack data
+  --test-summary         Test weekly summary generation with real Slack data
   --lookback <days>      How many days back to search for the most recent date header (default: 30)
   --create-back <days>   How many days back from today to create headers (default: 7)
   --create-forward <days> How many days forward from today to create headers (default: 7)
@@ -124,6 +154,10 @@ Options:
 Examples:
   # Preview what would be posted without actually posting
   bun run index.ts --dry-run
+
+  # Test interactive features with real data
+  bun run index.ts --test-leaderboard
+  bun run index.ts --test-summary
 
   # Only create headers for the past 2 weeks, no future dates
   bun run index.ts --create-back 14 --create-forward 0
@@ -243,6 +277,37 @@ The project uses:
 - [@slack/web-api](https://www.npmjs.com/package/@slack/web-api) - Slack Web API client
 - [@slack/bolt](https://www.npmjs.com/package/@slack/bolt) - Slack app framework
 - TypeScript for type safety
+- [Biome](https://biomejs.dev) - Fast formatter and linter
+- [Vitest](https://vitest.dev) - Unit testing framework
+
+### Running Tests
+
+```bash
+# Run all tests
+bun test
+
+# Run tests in watch mode
+bun run test:watch
+
+# Run tests with coverage
+bun run test:coverage
+
+# Run all quality checks (format, lint, test)
+just check
+```
+
+### Code Quality
+
+```bash
+# Format code
+just format
+
+# Lint code
+just lint
+
+# Fix formatting and linting issues
+just fix
+```
 
 ## License
 

@@ -25,14 +25,22 @@ check: format-check lint test
 fix:
     bun biome check --write .
 
-# Run the bot
+# Run the date header bot (background mode)
 run:
     bun run index.ts
+
+# Run the interactive bot (responds to mentions)
+bot:
+    bun run bot.ts
 
 # Run the bot in dry-run mode
 dry-run:
     bun run index.ts --dry-run
 
-# Development watch mode
+# Development watch mode for date headers
 dev:
     bun run --watch index.ts
+
+# Development watch mode for interactive bot
+dev-bot:
+    bun run --watch bot.ts

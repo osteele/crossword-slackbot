@@ -3,9 +3,11 @@ import parseArgs from 'minimist';
 
 const argv = parseArgs(process.argv.slice(2));
 const isDryRun = argv['dry-run'] || false;
-const lookbackDays = parseInt(argv.lookback ?? '30', 10);
-const createBackDays = parseInt(argv['create-back'] ?? '7', 10);
-const createForwardDays = parseInt(argv['create-forward'] ?? '7', 10);
+const testLeaderboard = argv['test-leaderboard'] || false;
+const testSummary = argv['test-summary'] || false;
+const lookbackDays = Number.parseInt(argv.lookback ?? '30', 10);
+const createBackDays = Number.parseInt(argv['create-back'] ?? '7', 10);
+const createForwardDays = Number.parseInt(argv['create-forward'] ?? '7', 10);
 
 // Validate numeric CLI arguments
 function validatePositiveInt(value: number, name: string): void {
@@ -355,6 +357,40 @@ async function addMissingDateSeparators(): Promise<void> {
   console.log('\nDone!');
 }
 
+// Test mode handlers
+async function runTests() {
+  if (!client) {
+    throw new Error('Slack client is not initialized');
+  }
+
+  const { generateLeaderboard, formatLeaderboardMessage } = await import('./src/leaderboard');
+  const { generateWeeklySummary, formatSummaryMessage } = await import('./src/summary');
+
+  const channelId = await findChannelId(channelName, client);
+  if (!channelId) {
+    console.error(`Channel '${channelName}' not found`);
+    process.exit(1);
+  }
+
+  if (testLeaderboard) {
+    console.log('=== TESTING LEADERBOARD ===\n');
+    const stats = await generateLeaderboard(client, channelId);
+    const message = formatLeaderboardMessage(stats);
+    console.log(message);
+    console.log('\n=== END LEADERBOARD TEST ===');
+    return;
+  }
+
+  if (testSummary) {
+    console.log('=== TESTING WEEKLY SUMMARY ===\n');
+    const summary = await generateWeeklySummary(client, channelId);
+    const message = formatSummaryMessage(summary);
+    console.log(message);
+    console.log('\n=== END SUMMARY TEST ===');
+    return;
+  }
+}
+
 // Only run if not imported as a module
 if (import.meta.main) {
   // Validate CLI arguments
@@ -368,6 +404,8 @@ Usage: bun run index.ts [options]
 
 Options:
   --dry-run              Don't post messages, just show what would be posted
+  --test-leaderboard     Test leaderboard generation and display output
+  --test-summary         Test weekly summary generation and display output
   --lookback <days>      How many days back to search for the most recent date header (default: 30)
   --create-back <days>   How many days back from today to create headers (default: 7)
   --create-forward <days> How many days forward from today to create headers (default: 7)
@@ -375,6 +413,8 @@ Options:
 
 Examples:
   bun run index.ts --dry-run
+  bun run index.ts --test-leaderboard
+  bun run index.ts --test-summary
   bun run index.ts --create-back 14 --create-forward 0
   bun run index.ts --lookback 60 --create-back 30 --create-forward 1
 `);
@@ -386,7 +426,11 @@ Examples:
     process.exit(1);
   }
 
-  addMissingDateSeparators().catch(console.error);
+  if (testLeaderboard || testSummary) {
+    runTests().catch(console.error);
+  } else {
+    addMissingDateSeparators().catch(console.error);
+  }
 }
 
 // Export functions for testing
