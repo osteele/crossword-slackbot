@@ -1,12 +1,24 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  findChannelId,
+  findMostRecentDateHeader,
   formatDateSeparator,
+  getChannelMessages,
   getDateRange,
   getPreviousSunday,
   getUpcomingSunday,
   isSameDay,
   parseExistingDateMessage,
+  postDateSeparator,
 } from './index';
+import {
+  createMockSlackClient,
+  mockConversationsHistoryResponse,
+  mockConversationsListResponse,
+  mockDateHeader,
+  mockMessage,
+  mockPostMessageResponse,
+} from './src/__tests__/helpers/mockSlackClient';
 
 describe('formatDateSeparator', () => {
   it('formats a Monday correctly', () => {
@@ -327,5 +339,230 @@ describe('date range calculation (CLI-based)', () => {
 
     expect(dateRange).toHaveLength(15); // 14 back + today
     expect(isSameDay(dateRange[dateRange.length - 1], today)).toBe(true);
+  });
+});
+
+describe('findChannelId', () => {
+  it('finds channel by name', async () => {
+    const mockClient = createMockSlackClient();
+    mockClient.conversations.list.mockResolvedValue(
+      mockConversationsListResponse([
+        { id: 'C123', name: 'general' },
+        { id: 'C456', name: 'crossword' },
+        { id: 'C789', name: 'random' },
+      ])
+    );
+
+    const channelId = await findChannelId('crossword', mockClient as any);
+    expect(channelId).toBe('C456');
+    expect(mockClient.conversations.list).toHaveBeenCalledWith({
+      types: 'public_channel',
+      cursor: undefined,
+      limit: 200,
+    });
+  });
+
+  it('strips # from channel name', async () => {
+    const mockClient = createMockSlackClient();
+    mockClient.conversations.list.mockResolvedValue(
+      mockConversationsListResponse([{ id: 'C123', name: 'general' }])
+    );
+
+    const channelId = await findChannelId('#general', mockClient as any);
+    expect(channelId).toBe('C123');
+  });
+
+  it('returns null when channel not found', async () => {
+    const mockClient = createMockSlackClient();
+    mockClient.conversations.list.mockResolvedValue(mockConversationsListResponse([]));
+
+    const channelId = await findChannelId('nonexistent', mockClient as any);
+    expect(channelId).toBeNull();
+  });
+
+  it('returns null on error', async () => {
+    const mockClient = createMockSlackClient();
+    mockClient.conversations.list.mockRejectedValue(new Error('API error'));
+
+    const channelId = await findChannelId('crossword', mockClient as any);
+    expect(channelId).toBeNull();
+  });
+});
+
+describe('getChannelMessages', () => {
+  it('fetches messages from a channel', async () => {
+    const mockClient = createMockSlackClient();
+    const oneWeekAgo = new Date('2024-11-05');
+    const messages = [
+      mockMessage('Hello', 'U1', '1699200000.000000'),
+      mockMessage('World', 'U2', '1699300000.000000'),
+    ];
+
+    mockClient.conversations.history.mockResolvedValue(mockConversationsHistoryResponse(messages));
+
+    const result = await getChannelMessages('C123', oneWeekAgo, mockClient as any);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].text).toBe('Hello');
+    expect(result[1].text).toBe('World');
+    expect(mockClient.conversations.history).toHaveBeenCalledWith({
+      channel: 'C123',
+      oldest: Math.floor(oneWeekAgo.getTime() / 1000).toString(),
+      cursor: undefined,
+      limit: 200,
+    });
+  });
+
+  it('handles pagination', async () => {
+    const mockClient = createMockSlackClient();
+    const oneWeekAgo = new Date('2024-11-05');
+
+    const page1Messages = [mockMessage('Message 1', 'U1', '1699200000.000000')];
+    const page2Messages = [mockMessage('Message 2', 'U2', '1699300000.000000')];
+
+    mockClient.conversations.history
+      .mockResolvedValueOnce(mockConversationsHistoryResponse(page1Messages, true, 'cursor123'))
+      .mockResolvedValueOnce(mockConversationsHistoryResponse(page2Messages, false));
+
+    const result = await getChannelMessages('C123', oneWeekAgo, mockClient as any);
+
+    expect(result).toHaveLength(2);
+    expect(mockClient.conversations.history).toHaveBeenCalledTimes(2);
+    expect(mockClient.conversations.history).toHaveBeenNthCalledWith(2, {
+      channel: 'C123',
+      oldest: Math.floor(oneWeekAgo.getTime() / 1000).toString(),
+      cursor: 'cursor123',
+      limit: 200,
+    });
+  });
+
+  it('sorts messages by timestamp', async () => {
+    const mockClient = createMockSlackClient();
+    const oneWeekAgo = new Date('2024-11-05');
+
+    // Messages in reverse chronological order
+    const messages = [
+      mockMessage('Later', 'U1', '1699300000.000000'),
+      mockMessage('Earlier', 'U2', '1699200000.000000'),
+    ];
+
+    mockClient.conversations.history.mockResolvedValue(mockConversationsHistoryResponse(messages));
+
+    const result = await getChannelMessages('C123', oneWeekAgo, mockClient as any);
+
+    expect(result[0].text).toBe('Earlier');
+    expect(result[1].text).toBe('Later');
+  });
+
+  it('returns empty array on error', async () => {
+    const mockClient = createMockSlackClient();
+    mockClient.conversations.history.mockRejectedValue(new Error('API error'));
+
+    const result = await getChannelMessages('C123', new Date(), mockClient as any);
+    expect(result).toEqual([]);
+  });
+});
+
+describe('findMostRecentDateHeader', () => {
+  it('finds the most recent date header', async () => {
+    const mockClient = createMockSlackClient();
+    const now = new Date();
+    const recentDate1 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2);
+    const recentDate2 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+
+    const messages = [
+      mockDateHeader(
+        formatDateSeparator(recentDate1)
+          .replace(/^--- |---$/g, '')
+          .trim(),
+        '1699200000.000000'
+      ),
+      mockMessage('Some chat', 'U1', '1699250000.000000'),
+      mockDateHeader(
+        formatDateSeparator(recentDate2)
+          .replace(/^--- |---$/g, '')
+          .trim(),
+        '1699300000.000000'
+      ),
+      mockMessage('More chat', 'U2', '1699350000.000000'),
+    ];
+
+    mockClient.conversations.history.mockResolvedValue(mockConversationsHistoryResponse(messages));
+
+    const result = await findMostRecentDateHeader('C123', 30, mockClient as any);
+
+    expect(result).not.toBeNull();
+    expect(result?.toDateString()).toBe(recentDate2.toDateString());
+  });
+
+  it('returns null when no date headers found', async () => {
+    const mockClient = createMockSlackClient();
+    const messages = [
+      mockMessage('Just chat', 'U1', '1699200000.000000'),
+      mockMessage('No dates here', 'U2', '1699300000.000000'),
+    ];
+
+    mockClient.conversations.history.mockResolvedValue(mockConversationsHistoryResponse(messages));
+
+    const result = await findMostRecentDateHeader('C123', 30, mockClient as any);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no messages exist', async () => {
+    const mockClient = createMockSlackClient();
+    mockClient.conversations.history.mockResolvedValue(mockConversationsHistoryResponse([]));
+
+    const result = await findMostRecentDateHeader('C123', 30, mockClient as any);
+    expect(result).toBeNull();
+  });
+});
+
+describe('postDateSeparator', () => {
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  it('posts date separator in normal mode', async () => {
+    const mockClient = createMockSlackClient();
+    mockClient.chat.postMessage.mockResolvedValue(
+      mockPostMessageResponse('C123', '1699200000.000000')
+    );
+
+    const date = new Date(2024, 10, 4); // Mon Nov 4, 2024
+    await postDateSeparator('C123', date, false, mockClient as any);
+
+    expect(mockClient.chat.postMessage).toHaveBeenCalledWith({
+      channel: 'C123',
+      text: '--- Mon 11/4 ---',
+    });
+    expect(consoleLogSpy).toHaveBeenCalledWith('Posted: --- Mon 11/4 ---');
+  });
+
+  it('does not post in dry-run mode', async () => {
+    const mockClient = createMockSlackClient();
+
+    const date = new Date(2024, 10, 4); // Mon Nov 4, 2024
+    await postDateSeparator('C123', date, true, mockClient as any);
+
+    expect(mockClient.chat.postMessage).not.toHaveBeenCalled();
+    expect(consoleLogSpy).toHaveBeenCalledWith('[DRY RUN] Would post: --- Mon 11/4 ---');
+  });
+
+  it('handles posting errors gracefully', async () => {
+    const mockClient = createMockSlackClient();
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockClient.chat.postMessage.mockRejectedValue(new Error('API error'));
+
+    const date = new Date(2024, 10, 4);
+    await postDateSeparator('C123', date, false, mockClient as any);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error posting message'),
+      expect.any(Error)
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 });

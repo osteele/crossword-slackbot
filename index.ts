@@ -146,13 +146,16 @@ function getDateRange(): Date[] {
   return dates;
 }
 
-async function findChannelId(channelName: string): Promise<string | null> {
+async function findChannelId(
+  channelName: string,
+  slackClient: WebClient = client
+): Promise<string | null> {
   try {
     const targetName = channelName.replace('#', '');
     let cursor: string | undefined;
 
     do {
-      const result = await client.conversations.list({
+      const result = await slackClient.conversations.list({
         types: 'public_channel',
         cursor,
         limit: 200,
@@ -173,14 +176,18 @@ async function findChannelId(channelName: string): Promise<string | null> {
   }
 }
 
-async function getChannelMessages(channelId: string, oneWeekAgo: Date): Promise<Message[]> {
+async function getChannelMessages(
+  channelId: string,
+  oneWeekAgo: Date,
+  slackClient: WebClient = client
+): Promise<Message[]> {
   const messages: Message[] = [];
   let cursor: string | undefined;
   const oldest = Math.floor(oneWeekAgo.getTime() / 1000).toString();
 
   try {
     do {
-      const result = await client.conversations.history({
+      const result = await slackClient.conversations.history({
         channel: channelId,
         oldest,
         cursor,
@@ -203,12 +210,13 @@ async function getChannelMessages(channelId: string, oneWeekAgo: Date): Promise<
 
 async function findMostRecentDateHeader(
   channelId: string,
-  lookbackDays: number
+  lookbackDays: number,
+  slackClient: WebClient = client
 ): Promise<Date | null> {
   const lookbackDate = new Date();
   lookbackDate.setDate(lookbackDate.getDate() - lookbackDays);
 
-  const messages = await getChannelMessages(channelId, lookbackDate);
+  const messages = await getChannelMessages(channelId, lookbackDate, slackClient);
 
   let mostRecentDate: Date | null = null;
   for (const message of messages) {
@@ -223,7 +231,12 @@ async function findMostRecentDateHeader(
   return mostRecentDate;
 }
 
-async function postDateSeparator(channelId: string, date: Date, dryRun: boolean): Promise<void> {
+async function postDateSeparator(
+  channelId: string,
+  date: Date,
+  dryRun: boolean,
+  slackClient: WebClient = client
+): Promise<void> {
   const text = formatDateSeparator(date);
 
   if (dryRun) {
@@ -232,7 +245,7 @@ async function postDateSeparator(channelId: string, date: Date, dryRun: boolean)
   }
 
   try {
-    await client.chat.postMessage({
+    await slackClient.chat.postMessage({
       channel: channelId,
       text,
     });
@@ -370,4 +383,8 @@ export {
   _getPreviousSunday as getPreviousSunday,
   getUpcomingSunday,
   getDateRange,
+  findChannelId,
+  getChannelMessages,
+  findMostRecentDateHeader,
+  postDateSeparator,
 };
