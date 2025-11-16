@@ -136,6 +136,7 @@ Users can then interact with the bot by mentioning it:
    (Find this in your Slack app settings under "Basic Information" → "App Credentials")
 3. Reinstall the app to grant the new permission
 4. The bot listens on port 3000 by default (set `PORT` environment variable to change)
+5. **For production:** Deploy to a cloud service (see "Deploying Interactive Bot" section below)
 
 ### CLI Options
 
@@ -252,6 +253,154 @@ Other cloud options if you prefer:
 - **Google Cloud Scheduler + Cloud Run**: Similar to AWS option
 
 For most users, **GitHub Actions is recommended** because it's free, reliable, and requires no infrastructure management.
+
+## Deploying Interactive Bot
+
+To enable interactive features (`@bot leaderboard`, `@bot summary`), you need to deploy `bot.ts` to a cloud service that runs 24/7.
+
+### Option 1: Fly.io (Recommended)
+
+[Fly.io](https://fly.io) offers a generous free tier with no "cold starts" or sleeping, making it perfect for Slack bots.
+
+**Prerequisites:**
+- [Install flyctl CLI](https://fly.io/docs/hands-on/install-flyctl/)
+- Sign up for a Fly.io account: `flyctl auth signup`
+
+**Deployment steps:**
+
+#### Method 1: GitHub Actions (Recommended)
+
+The easiest way - deploy automatically on every push to main:
+
+1. **Get your Fly.io API token:**
+   ```bash
+   flyctl auth token
+   ```
+   Copy the token that's displayed.
+
+2. **Create the Fly.io app** (one-time setup):
+   ```bash
+   flyctl launch --no-deploy
+   ```
+   - Choose a name (or accept the generated one)
+   - Select a region (choose one close to you)
+   - Say "no" to deploying now
+
+3. **Set secrets in Fly.io:**
+   ```bash
+   flyctl secrets set SLACK_BOT_TOKEN=xoxb-your-token-here
+   flyctl secrets set SLACK_SIGNING_SECRET=your-signing-secret
+   flyctl secrets set SLACK_CHANNEL=crossword
+   ```
+
+4. **Add Fly.io token to GitHub:**
+   - Go to your GitHub repo → Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `FLY_API_TOKEN`
+   - Value: Paste the token from step 1
+   - Click "Add secret"
+
+5. **Push to GitHub:**
+   ```bash
+   git add .
+   git commit -m "Add Fly.io deployment"
+   git push origin main
+   ```
+
+6. **Watch it deploy:**
+   - Go to your GitHub repo → Actions tab
+   - You should see "Fly Deploy" workflow running
+   - Once complete, your bot is live!
+
+**Future updates:** Just push to main and GitHub Actions will auto-deploy.
+
+#### Method 2: Local Deploy
+
+If you prefer to deploy from your local machine:
+
+1. **Create the app:**
+   ```bash
+   flyctl launch --no-deploy
+   ```
+
+2. **Set environment variables:**
+   ```bash
+   flyctl secrets set SLACK_BOT_TOKEN=xoxb-your-token-here
+   flyctl secrets set SLACK_SIGNING_SECRET=your-signing-secret
+   flyctl secrets set SLACK_CHANNEL=crossword
+   ```
+
+3. **Deploy:**
+   ```bash
+   flyctl deploy --remote-only
+   ```
+   (Use `--remote-only` to build on Fly's servers, avoiding local Docker issues)
+
+4. **Configure Slack Event Subscriptions:**
+   - Go to your Slack app settings → "Event Subscriptions"
+   - Enable Events
+   - Set Request URL to: `https://your-app-name.fly.dev/slack/events`
+     (Replace `your-app-name` with your Fly.io app name)
+   - Subscribe to bot events: `app_mention`
+   - Save changes
+
+5. **Test it:**
+   - In your Slack channel: `@Crossword Date Bot help`
+   - The bot should respond with available commands
+
+**Monitoring:**
+```bash
+# View logs
+flyctl logs
+
+# Check status
+flyctl status
+
+# SSH into the app
+flyctl ssh console
+```
+
+**Updating:**
+```bash
+# After making code changes
+git commit -am "Update bot"
+flyctl deploy
+```
+
+**Cost:** Free tier includes 3 shared-cpu VMs with 256MB RAM each - plenty for this bot!
+
+### Option 2: Railway
+
+If you prefer a simpler UI-based deployment:
+
+1. Go to [railway.app](https://railway.app) and sign up
+2. Click "New Project" → "Deploy from GitHub repo"
+3. Select your `crossword-slackbot` repository
+4. Add environment variables:
+   - `SLACK_BOT_TOKEN`
+   - `SLACK_SIGNING_SECRET`
+   - `SLACK_CHANNEL`
+5. Railway will auto-deploy
+6. Copy the public URL from Railway dashboard
+7. Configure Slack Event Subscriptions with Railway URL + `/slack/events`
+
+**Cost:** $5/month credit on free tier (enough for small bots)
+
+### Option 3: Render
+
+For a truly free option (with cold starts):
+
+1. Go to [render.com](https://render.com) and sign up
+2. Click "New +" → "Web Service"
+3. Connect your GitHub repo
+4. Configure:
+   - **Build Command:** `bun install`
+   - **Start Command:** `bun run bot.ts`
+5. Add environment variables
+6. Deploy
+7. Configure Slack Event Subscriptions with Render URL + `/slack/events`
+
+**Note:** Free tier services "sleep" after 15 min of inactivity. First @mention may timeout, but subsequent ones will work.
 
 ## Date Format
 
