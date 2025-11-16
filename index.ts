@@ -17,38 +17,10 @@ function validatePositiveInt(value: number, name: string): void {
   }
 }
 
-validatePositiveInt(lookbackDays, 'lookback');
-validatePositiveInt(createBackDays, 'create-back');
-validatePositiveInt(createForwardDays, 'create-forward');
-
 const token = process.env.SLACK_BOT_TOKEN;
 const channelName = process.env.SLACK_CHANNEL || 'crossword';
 
-if (!token) {
-  console.error('SLACK_BOT_TOKEN environment variable is required');
-  process.exit(1);
-}
-
-if (argv.help || argv.h) {
-  console.log(`
-Usage: bun run index.ts [options]
-
-Options:
-  --dry-run              Don't post messages, just show what would be posted
-  --lookback <days>      How many days back to search for the most recent date header (default: 30)
-  --create-back <days>   How many days back from today to create headers (default: 7)
-  --create-forward <days> How many days forward from today to create headers (default: 7)
-  --help, -h             Show this help message
-
-Examples:
-  bun run index.ts --dry-run
-  bun run index.ts --create-back 14 --create-forward 0
-  bun run index.ts --lookback 60 --create-back 30 --create-forward 1
-`);
-  process.exit(0);
-}
-
-const client = new WebClient(token);
+const client = token ? new WebClient(token) : undefined;
 
 interface Message {
   text?: string;
@@ -146,10 +118,10 @@ function getDateRange(): Date[] {
   return dates;
 }
 
-async function findChannelId(
-  channelName: string,
-  slackClient: WebClient = client
-): Promise<string | null> {
+async function findChannelId(channelName: string, slackClient?: WebClient): Promise<string | null> {
+  if (!slackClient) {
+    throw new Error('Slack client is required');
+  }
   try {
     const targetName = channelName.replace('#', '');
     let cursor: string | undefined;
@@ -179,8 +151,11 @@ async function findChannelId(
 async function getChannelMessages(
   channelId: string,
   oneWeekAgo: Date,
-  slackClient: WebClient = client
+  slackClient?: WebClient
 ): Promise<Message[]> {
+  if (!slackClient) {
+    throw new Error('Slack client is required');
+  }
   const messages: Message[] = [];
   let cursor: string | undefined;
   const oldest = Math.floor(oneWeekAgo.getTime() / 1000).toString();
@@ -211,8 +186,11 @@ async function getChannelMessages(
 async function findMostRecentDateHeader(
   channelId: string,
   lookbackDays: number,
-  slackClient: WebClient = client
+  slackClient?: WebClient
 ): Promise<Date | null> {
+  if (!slackClient) {
+    throw new Error('Slack client is required');
+  }
   const lookbackDate = new Date();
   lookbackDate.setDate(lookbackDate.getDate() - lookbackDays);
 
@@ -235,8 +213,11 @@ async function postDateSeparator(
   channelId: string,
   date: Date,
   dryRun: boolean,
-  slackClient: WebClient = client
+  slackClient?: WebClient
 ): Promise<void> {
+  if (!slackClient && !dryRun) {
+    throw new Error('Slack client is required when not in dry-run mode');
+  }
   const text = formatDateSeparator(date);
 
   if (dryRun) {
@@ -256,12 +237,16 @@ async function postDateSeparator(
 }
 
 async function addMissingDateSeparators(): Promise<void> {
+  if (!client) {
+    throw new Error('Slack client is not initialized');
+  }
+
   if (isDryRun) {
     console.log('=== DRY RUN MODE ===');
     console.log('No messages will be posted to Slack\n');
   }
 
-  const channelId = await findChannelId(channelName);
+  const channelId = await findChannelId(channelName, client);
 
   if (!channelId) {
     console.error(`Channel '${channelName}' not found`);
@@ -274,7 +259,7 @@ async function addMissingDateSeparators(): Promise<void> {
   );
 
   // Find the most recent date header
-  const mostRecentHeader = await findMostRecentDateHeader(channelId, lookbackDays);
+  const mostRecentHeader = await findMostRecentDateHeader(channelId, lookbackDays, client);
 
   // Calculate the date range based on CLI arguments
   const today = new Date();
@@ -315,7 +300,7 @@ async function addMissingDateSeparators(): Promise<void> {
     `Checking dates from ${startDate.toDateString()} to ${endDate.toDateString()} (${dateRange.length} days)`
   );
 
-  const messages = await getChannelMessages(channelId, startDate);
+  const messages = await getChannelMessages(channelId, startDate, client);
   console.log(`Found ${messages.length} messages in date range`);
 
   const existingDates = new Set<string>();
@@ -363,7 +348,7 @@ async function addMissingDateSeparators(): Promise<void> {
   );
 
   for (const date of missingDates) {
-    await postDateSeparator(channelId, date, isDryRun);
+    await postDateSeparator(channelId, date, isDryRun, client);
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
@@ -372,6 +357,35 @@ async function addMissingDateSeparators(): Promise<void> {
 
 // Only run if not imported as a module
 if (import.meta.main) {
+  // Validate CLI arguments
+  validatePositiveInt(lookbackDays, 'lookback');
+  validatePositiveInt(createBackDays, 'create-back');
+  validatePositiveInt(createForwardDays, 'create-forward');
+
+  if (argv.help || argv.h) {
+    console.log(`
+Usage: bun run index.ts [options]
+
+Options:
+  --dry-run              Don't post messages, just show what would be posted
+  --lookback <days>      How many days back to search for the most recent date header (default: 30)
+  --create-back <days>   How many days back from today to create headers (default: 7)
+  --create-forward <days> How many days forward from today to create headers (default: 7)
+  --help, -h             Show this help message
+
+Examples:
+  bun run index.ts --dry-run
+  bun run index.ts --create-back 14 --create-forward 0
+  bun run index.ts --lookback 60 --create-back 30 --create-forward 1
+`);
+    process.exit(0);
+  }
+
+  if (!token) {
+    console.error('SLACK_BOT_TOKEN environment variable is required');
+    process.exit(1);
+  }
+
   addMissingDateSeparators().catch(console.error);
 }
 
