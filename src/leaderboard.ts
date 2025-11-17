@@ -38,14 +38,24 @@ async function getWeekSolves(client: WebClient, channelId: string): Promise<User
   monday.setHours(0, 0, 0, 0);
 
   try {
-    // Fetch messages from Monday onwards
-    const result = await client.conversations.history({
-      channel: channelId,
-      oldest: Math.floor(monday.getTime() / 1000).toString(),
-      limit: 1000,
-    });
+    // Fetch all messages from Monday onwards with pagination
+    const messages = [];
+    let cursor: string | undefined;
 
-    const messages = result.messages || [];
+    do {
+      const result = await client.conversations.history({
+        channel: channelId,
+        oldest: Math.floor(monday.getTime() / 1000).toString(),
+        limit: 1000,
+        cursor,
+      });
+
+      if (result.messages) {
+        messages.push(...result.messages);
+      }
+
+      cursor = result.response_metadata?.next_cursor;
+    } while (cursor);
 
     // Find date header messages
     const dateHeaders = messages.filter(
@@ -56,12 +66,26 @@ async function getWeekSolves(client: WebClient, channelId: string): Promise<User
     for (const header of dateHeaders) {
       if (!header.ts) continue;
 
-      const threadResult = await client.conversations.replies({
-        channel: channelId,
-        ts: header.ts,
-      });
+      // Fetch all replies with pagination
+      const allReplies = [];
+      let replyCursor: string | undefined;
 
-      const replies = (threadResult.messages || []).slice(1); // Skip the header itself
+      do {
+        const threadResult = await client.conversations.replies({
+          channel: channelId,
+          ts: header.ts,
+          cursor: replyCursor,
+          limit: 100,
+        });
+
+        if (threadResult.messages) {
+          allReplies.push(...threadResult.messages);
+        }
+
+        replyCursor = threadResult.response_metadata?.next_cursor;
+      } while (replyCursor);
+
+      const replies = allReplies.slice(1); // Skip the header itself
 
       for (const reply of replies) {
         if (!reply.text || !reply.user) continue;

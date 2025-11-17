@@ -23,13 +23,25 @@ const app = new App({
  */
 async function findChannelId(channelNameToFind: string): Promise<string | null> {
   try {
-    const result = await app.client.conversations.list({
-      types: 'public_channel',
-    });
+    const targetName = channelNameToFind.replace('#', '');
+    let cursor: string | undefined;
 
-    const channel = result.channels?.find((ch) => ch.name === channelNameToFind.replace('#', ''));
+    do {
+      const result = await app.client.conversations.list({
+        types: 'public_channel',
+        cursor,
+        limit: 200,
+      });
 
-    return channel?.id || null;
+      const channel = result.channels?.find((ch) => ch.name === targetName);
+      if (channel?.id) {
+        return channel.id;
+      }
+
+      cursor = result.response_metadata?.next_cursor;
+    } while (cursor);
+
+    return null;
   } catch (error) {
     console.error('Error finding channel:', error);
     return null;

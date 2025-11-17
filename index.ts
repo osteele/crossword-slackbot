@@ -55,12 +55,21 @@ function parseExistingDateMessage(text: string): Date | null {
     return null;
   }
 
-  // Handle year boundary: if parsed date is >6 months in the future,
-  // assume it's from last year (e.g., parsing "Dec 28" in early January)
-  const sixMonthsFromNow = new Date();
+  // Handle year boundary:
+  // - If parsed date is >6 months in the future, assume it's from last year
+  //   (e.g., parsing "Dec 28" in early January)
+  // - If parsed date is >6 months in the past, assume it's from next year
+  //   (e.g., parsing "Jan 1" in late December)
+  const now = new Date();
+  const sixMonthsAgo = new Date(now);
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const sixMonthsFromNow = new Date(now);
   sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+
   if (date > sixMonthsFromNow) {
     date = new Date(currentYear - 1, month - 1, day);
+  } else if (date < sixMonthsAgo) {
+    date = new Date(currentYear + 1, month - 1, day);
   }
 
   return date;

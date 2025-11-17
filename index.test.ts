@@ -112,10 +112,19 @@ describe('parseExistingDateMessage', () => {
     expect(result?.getMonth()).toBe(0); // January (0-indexed)
     expect(result?.getDate()).toBe(1);
 
-    // Should always be current year or next year, never more than 6 months away
+    // Verify the year is correctly calculated based on 6-month window
     const now = new Date();
-    expect(result?.getFullYear()).toBeGreaterThanOrEqual(now.getFullYear());
-    expect(result?.getFullYear()).toBeLessThanOrEqual(now.getFullYear() + 1);
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const testDate = new Date(now.getFullYear(), 0, 1); // Jan 1 this year
+    if (testDate < sixMonthsAgo) {
+      // If Jan 1 of this year is more than 6 months ago, should be next year
+      expect(result?.getFullYear()).toBe(now.getFullYear() + 1);
+    } else {
+      // Otherwise should be this year
+      expect(result?.getFullYear()).toBe(now.getFullYear());
+    }
   });
 
   it('parses recent dates with current year', () => {

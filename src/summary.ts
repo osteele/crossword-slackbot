@@ -25,14 +25,26 @@ async function getWeekData(client: WebClient, channelId: string, weekStart: Date
   const solves: Array<{ totalSeconds: number; userId: string; userName: string }> = [];
 
   try {
-    const result = await client.conversations.history({
-      channel: channelId,
-      oldest: Math.floor(weekStart.getTime() / 1000).toString(),
-      latest: Math.floor(weekEnd.getTime() / 1000).toString(),
-      limit: 1000,
-    });
+    // Fetch all messages with pagination
+    const messages = [];
+    let cursor: string | undefined;
 
-    const messages = result.messages || [];
+    do {
+      const result = await client.conversations.history({
+        channel: channelId,
+        oldest: Math.floor(weekStart.getTime() / 1000).toString(),
+        latest: Math.floor(weekEnd.getTime() / 1000).toString(),
+        limit: 1000,
+        cursor,
+      });
+
+      if (result.messages) {
+        messages.push(...result.messages);
+      }
+
+      cursor = result.response_metadata?.next_cursor;
+    } while (cursor);
+
     const dateHeaders = messages.filter(
       (msg) => msg.text && /---\s*(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat)/.test(msg.text)
     );
@@ -40,12 +52,26 @@ async function getWeekData(client: WebClient, channelId: string, weekStart: Date
     for (const header of dateHeaders) {
       if (!header.ts) continue;
 
-      const threadResult = await client.conversations.replies({
-        channel: channelId,
-        ts: header.ts,
-      });
+      // Fetch all replies with pagination
+      const allReplies = [];
+      let replyCursor: string | undefined;
 
-      const replies = (threadResult.messages || []).slice(1);
+      do {
+        const threadResult = await client.conversations.replies({
+          channel: channelId,
+          ts: header.ts,
+          cursor: replyCursor,
+          limit: 100,
+        });
+
+        if (threadResult.messages) {
+          allReplies.push(...threadResult.messages);
+        }
+
+        replyCursor = threadResult.response_metadata?.next_cursor;
+      } while (replyCursor);
+
+      const replies = allReplies.slice(1);
 
       for (const reply of replies) {
         if (!reply.text || !reply.user) continue;
