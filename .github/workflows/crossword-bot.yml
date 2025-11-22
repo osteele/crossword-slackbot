@@ -4,9 +4,9 @@ on:
   schedule:
     # Run daily at 8 PM ET (midnight UTC in winter, 1 AM UTC in summer)
     # Adjust this cron expression to match your preferred time
-    - cron: '0 0 * * *'  # Midnight UTC daily
+    - cron: "0 0 * * *" # Midnight UTC daily
 
-  workflow_dispatch:  # Allow manual triggering for testing
+  workflow_dispatch: # Allow manual triggering for testing
 
 jobs:
   post-date-separators:
@@ -28,7 +28,7 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
-        run: bun run index.ts --create-back 0 --create-forward 1
+        run: bun run index.ts --create-back 7 --create-forward 0
 
       - name: Report completion
         if: success()
