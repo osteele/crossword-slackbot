@@ -18,8 +18,12 @@ test:
 test-coverage:
     bun test --coverage
 
-# Run all checks (format, lint, test)
-check: format-check lint test
+# Run all checks (format, lint, test, typecheck)
+check: format-check lint test typecheck
+
+# Type check with TypeScript
+typecheck:
+    bunx tsc --noEmit
 
 # Fix formatting and linting issues
 fix:

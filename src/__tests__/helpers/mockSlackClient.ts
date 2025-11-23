@@ -51,11 +51,15 @@ export function mockUserInfo(userId: string, realName: string) {
 /**
  * Create a mock message
  */
-export function mockMessage(text: string, user?: string, ts?: string) {
+export function mockMessage(
+  text: string,
+  user?: string,
+  ts?: string
+): { text: string; ts: string; user?: string } {
   return {
     text,
+    ts: ts ?? '0',
     ...(user && { user }),
-    ...(ts && { ts }),
   };
 }
 

@@ -42,7 +42,7 @@ function parseExistingDateMessage(text: string): Date | null {
   const pattern = /---\s*(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s*(\d{1,2})\/(\d{1,2})\s*---/;
   const match = text.match(pattern);
 
-  if (!match) return null;
+  if (!match || !match[1] || !match[2]) return null;
 
   const month = parseInt(match[1], 10);
   const day = parseInt(match[2], 10);
@@ -237,7 +237,7 @@ async function postDateSeparator(
   }
 
   try {
-    await slackClient.chat.postMessage({
+    await slackClient?.chat.postMessage({
       channel: channelId,
       text,
     });

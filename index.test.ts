@@ -233,14 +233,14 @@ describe('getDateRange', () => {
     const range = getDateRange();
 
     expect(range).toHaveLength(7);
-    expect(range[range.length - 1].getDay()).toBe(0); // Last day is Sunday
+    expect(range[range.length - 1]?.getDay()).toBe(0); // Last day is Sunday
   });
 
   it('returns dates in ascending order', () => {
     const range = getDateRange();
 
     for (let i = 1; i < range.length; i++) {
-      expect(range[i].getTime()).toBeGreaterThan(range[i - 1].getTime());
+      expect(range[i]?.getTime()).toBeGreaterThan(range[i - 1]?.getTime() ?? 0);
     }
   });
 
@@ -298,8 +298,8 @@ describe('date range calculation (CLI-based)', () => {
     }
 
     expect(dateRange).toHaveLength(2); // Today and tomorrow
-    expect(isSameDay(dateRange[0], today)).toBe(true);
-    expect(dateRange[1].getDate()).toBe((today.getDate() + 1) % 32 || 1);
+    expect(isSameDay(dateRange[0]!, today)).toBe(true);
+    expect(dateRange[1]?.getDate()).toBe((today.getDate() + 1) % 32 || 1);
   });
 
   it('calculates correct range for create-back=7, create-forward=7', () => {
@@ -323,7 +323,7 @@ describe('date range calculation (CLI-based)', () => {
     }
 
     expect(dateRange).toHaveLength(15); // 7 back + today + 7 forward
-    expect(isSameDay(dateRange[7], today)).toBe(true); // Middle day is today
+    expect(isSameDay(dateRange[7]!, today)).toBe(true); // Middle day is today
   });
 
   it('calculates correct range for create-back=14, create-forward=0', () => {
@@ -347,7 +347,7 @@ describe('date range calculation (CLI-based)', () => {
     }
 
     expect(dateRange).toHaveLength(15); // 14 back + today
-    expect(isSameDay(dateRange[dateRange.length - 1], today)).toBe(true);
+    expect(isSameDay(dateRange[dateRange.length - 1]!, today)).toBe(true);
   });
 });
 
@@ -412,8 +412,8 @@ describe('getChannelMessages', () => {
     const result = await getChannelMessages('C123', oneWeekAgo, mockClient as any);
 
     expect(result).toHaveLength(2);
-    expect(result[0].text).toBe('Hello');
-    expect(result[1].text).toBe('World');
+    expect(result[0]?.text).toBe('Hello');
+    expect(result[1]?.text).toBe('World');
     expect(mockClient.conversations.history).toHaveBeenCalledWith({
       channel: 'C123',
       oldest: Math.floor(oneWeekAgo.getTime() / 1000).toString(),
@@ -459,8 +459,8 @@ describe('getChannelMessages', () => {
 
     const result = await getChannelMessages('C123', oneWeekAgo, mockClient as any);
 
-    expect(result[0].text).toBe('Earlier');
-    expect(result[1].text).toBe('Later');
+    expect(result[0]?.text).toBe('Earlier');
+    expect(result[1]?.text).toBe('Later');
   });
 
   it('returns empty array on error', async () => {

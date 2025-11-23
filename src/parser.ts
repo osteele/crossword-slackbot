@@ -18,7 +18,7 @@ export function parseSolveTime(text: string): SolveTime | null {
   const colonPattern = /(\d*):(\d{2})/;
   const colonMatch = text.match(colonPattern);
 
-  if (colonMatch) {
+  if (colonMatch?.[2]) {
     const minutes = colonMatch[1] ? Number.parseInt(colonMatch[1], 10) : 0;
     const seconds = Number.parseInt(colonMatch[2], 10);
 
@@ -39,7 +39,7 @@ export function parseSolveTime(text: string): SolveTime | null {
   const bareNumberPattern = /^(\d+)$/;
   const bareMatch = text.match(bareNumberPattern);
 
-  if (bareMatch) {
+  if (bareMatch?.[1]) {
     const value = Number.parseInt(bareMatch[1], 10);
     if (value < 60) {
       return {

@@ -49,10 +49,10 @@ describe('generateLeaderboard', () => {
     const result = await generateLeaderboard(mockClient as any, 'C12345');
 
     expect(result.topTimes).toHaveLength(2);
-    expect(result.topTimes[0].userName).toBe('Bob');
-    expect(result.topTimes[0].totalSeconds).toBe(75);
-    expect(result.topTimes[1].userName).toBe('Alice');
-    expect(result.topTimes[1].totalSeconds).toBe(225);
+    expect(result.topTimes[0]?.userName).toBe('Bob');
+    expect(result.topTimes[0]?.totalSeconds).toBe(75);
+    expect(result.topTimes[1]?.userName).toBe('Alice');
+    expect(result.topTimes[1]?.totalSeconds).toBe(225);
   });
 
   it('tracks consecutive day streaks', async () => {
@@ -94,8 +94,8 @@ describe('generateLeaderboard', () => {
     const result = await generateLeaderboard(mockClient as any, 'C12345');
 
     expect(result.streaks).toHaveLength(1);
-    expect(result.streaks[0].userName).toBe('Alice');
-    expect(result.streaks[0].days).toBe(3);
+    expect(result.streaks[0]?.userName).toBe('Alice');
+    expect(result.streaks[0]?.days).toBe(3);
   });
 
   it('handles no solves gracefully', async () => {
@@ -126,8 +126,8 @@ describe('generateLeaderboard', () => {
     const result = await generateLeaderboard(mockClient as any, 'C12345');
 
     expect(result.topTimes).toHaveLength(1);
-    expect(result.topTimes[0].userName).toBe('Alice');
-    expect(result.topTimes[0].totalSeconds).toBe(83);
+    expect(result.topTimes[0]?.userName).toBe('Alice');
+    expect(result.topTimes[0]?.totalSeconds).toBe(83);
   });
 
   it('ignores messages without valid times', async () => {
@@ -149,7 +149,7 @@ describe('generateLeaderboard', () => {
     const result = await generateLeaderboard(mockClient as any, 'C12345');
 
     expect(result.topTimes).toHaveLength(1);
-    expect(result.topTimes[0].userName).toBe('Bob');
+    expect(result.topTimes[0]?.userName).toBe('Bob');
   });
 
   it('limits to top 5 times', async () => {
@@ -179,7 +179,7 @@ describe('generateLeaderboard', () => {
     const result = await generateLeaderboard(mockClient as any, 'C12345');
 
     expect(result.topTimes).toHaveLength(5);
-    expect(result.topTimes[4].totalSeconds).toBe(300); // 5:00
+    expect(result.topTimes[4]?.totalSeconds).toBe(300); // 5:00
   });
 
   it('handles user info fetch errors gracefully', async () => {
