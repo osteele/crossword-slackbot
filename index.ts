@@ -5,6 +5,7 @@ const argv = parseArgs(process.argv.slice(2));
 const isDryRun = argv['dry-run'] || false;
 const testLeaderboard = argv['test-leaderboard'] || false;
 const testSummary = argv['test-summary'] || false;
+const postWeeklyStats = argv['post-weekly-stats'] || false;
 const lookbackDays = Number.parseInt(argv.lookback ?? '30', 10);
 const createBackDays = Number.parseInt(argv['create-back'] ?? '7', 10);
 const createForwardDays = Number.parseInt(argv['create-forward'] ?? '7', 10);
@@ -400,6 +401,53 @@ async function runTests() {
   }
 }
 
+// Post weekly stats (leaderboard + summary) to channel
+async function postWeeklyStatsToChannel() {
+  if (!client) {
+    throw new Error('Slack client is not initialized');
+  }
+
+  const { generateLeaderboard, formatLeaderboardMessage } = await import('./src/leaderboard');
+  const { generateWeeklySummary, formatSummaryMessage } = await import('./src/summary');
+
+  const channelId = await findChannelId(channelName, client);
+  if (!channelId) {
+    console.error(`Channel '${channelName}' not found`);
+    process.exit(1);
+  }
+
+  console.log(`Posting weekly stats to #${channelName}...`);
+
+  // Generate both reports
+  const [stats, summary] = await Promise.all([
+    generateLeaderboard(client, channelId),
+    generateWeeklySummary(client, channelId),
+  ]);
+
+  const leaderboardMessage = formatLeaderboardMessage(stats);
+  const summaryMessage = formatSummaryMessage(summary);
+
+  // Combine into a single weekly recap message
+  const combinedMessage = `*🏆 Weekly Crossword Recap*\n\n${leaderboardMessage}\n\n---\n\n${summaryMessage}`;
+
+  if (isDryRun) {
+    console.log('[DRY RUN] Would post:\n');
+    console.log(combinedMessage);
+    return;
+  }
+
+  try {
+    await client.chat.postMessage({
+      channel: channelId,
+      text: combinedMessage,
+    });
+    console.log('Weekly stats posted successfully!');
+  } catch (error) {
+    console.error('Error posting weekly stats:', error);
+    process.exit(1);
+  }
+}
+
 // Only run if not imported as a module
 if (import.meta.main) {
   // Validate CLI arguments
@@ -415,6 +463,7 @@ Options:
   --dry-run              Don't post messages, just show what would be posted
   --test-leaderboard     Test leaderboard generation and display output
   --test-summary         Test weekly summary generation and display output
+  --post-weekly-stats    Post weekly stats (leaderboard + summary) to the channel
   --lookback <days>      How many days back to search for the most recent date header (default: 30)
   --create-back <days>   How many days back from today to create headers (default: 7)
   --create-forward <days> How many days forward from today to create headers (default: 7)
@@ -424,6 +473,8 @@ Examples:
   bun run index.ts --dry-run
   bun run index.ts --test-leaderboard
   bun run index.ts --test-summary
+  bun run index.ts --post-weekly-stats --dry-run
+  bun run index.ts --post-weekly-stats
   bun run index.ts --create-back 14 --create-forward 0
   bun run index.ts --lookback 60 --create-back 30 --create-forward 1
 `);
@@ -437,6 +488,8 @@ Examples:
 
   if (testLeaderboard || testSummary) {
     runTests().catch(console.error);
+  } else if (postWeeklyStats) {
+    postWeeklyStatsToChannel().catch(console.error);
   } else {
     addMissingDateSeparators().catch(console.error);
   }

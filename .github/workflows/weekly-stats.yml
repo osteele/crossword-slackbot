@@ -1,0 +1,41 @@
+name: Weekly Crossword Stats
+
+on:
+  schedule:
+    # Run every Sunday at 5 PM ET (10 PM UTC in winter, 9 PM UTC in summer)
+    # Using 10 PM UTC to target late Sunday afternoon ET
+    - cron: "0 22 * * 0" # 10 PM UTC every Sunday
+
+  workflow_dispatch: # Allow manual triggering for testing
+
+jobs:
+  post-weekly-stats:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Post weekly stats to Slack
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+        run: bun run index.ts --post-weekly-stats
+
+      - name: Report completion
+        if: success()
+        run: echo "Weekly stats posted successfully"
+
+      - name: Report failure
+        if: failure()
+        run: |
+          echo "Failed to post weekly stats - check logs above"
+          exit 1
