@@ -127,10 +127,11 @@ describe('parseExistingDateMessage', () => {
     }
   });
 
-  it('parses recent dates with current year', () => {
-    // A date within 6 months should use current year
+  it('parses recent dates with correct year', () => {
+    // A date within 6 months should use the appropriate year
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const expectedYear = nextMonth.getFullYear(); // May be next year if we cross Dec->Jan
     const month = nextMonth.getMonth() + 1;
     const day = 15;
 
@@ -138,7 +139,7 @@ describe('parseExistingDateMessage', () => {
     const result = parseExistingDateMessage(text);
 
     expect(result).not.toBeNull();
-    expect(result?.getFullYear()).toBe(new Date().getFullYear());
+    expect(result?.getFullYear()).toBe(expectedYear);
   });
 });
 
