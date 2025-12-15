@@ -115,37 +115,34 @@ describe('generateWeeklySummary', () => {
     expect(result.funFacts.some((fact) => fact.includes('Alice'))).toBe(true);
   });
 
-  it('generates fun fact for speed improvement', async () => {
-    mockClient.conversations.history
-      .mockResolvedValueOnce({
-        messages: [mockDateHeader('Mon 11/4', '1699084800.000000')],
-      })
-      .mockResolvedValueOnce({
-        messages: [mockDateHeader('Mon 10/28', '1698480000.000000')],
-      });
+  it('handles ties in fastest solve', async () => {
+    mockClient.conversations.history.mockResolvedValue({
+      messages: [mockDateHeader('Mon 11/4', '1699084800.000000')],
+    });
 
-    mockClient.conversations.replies
-      // Current week - fast times
-      .mockResolvedValueOnce({
-        messages: [
-          mockDateHeader('Mon 11/4', '1699084800.000000'),
-          mockMessage('1:00', 'U001', '1699084900.000000'),
-        ],
-      })
-      // Last week - slower times
-      .mockResolvedValueOnce({
-        messages: [
-          mockDateHeader('Mon 10/28', '1698480000.000000'),
-          mockMessage('3:00', 'U001', '1698480100.000000'),
-        ],
-      });
+    mockClient.conversations.replies.mockResolvedValue({
+      messages: [
+        mockDateHeader('Mon 11/4', '1699084800.000000'),
+        mockMessage('0:25', 'U001', '1699084900.000000'), // Tied fastest
+        mockMessage('0:25', 'U002', '1699085000.000000'), // Tied fastest
+        mockMessage('1:00', 'U003', '1699085100.000000'), // Not fastest
+      ],
+    });
 
-    mockClient.users.info.mockResolvedValue(mockUserInfo('U001', 'Alice'));
+    mockClient.users.info
+      .mockResolvedValueOnce(mockUserInfo('U001', 'Alice'))
+      .mockResolvedValueOnce(mockUserInfo('U002', 'Bob'))
+      .mockResolvedValueOnce(mockUserInfo('U003', 'Carol'));
 
     const result = await generateWeeklySummary(mockClient as any, 'C12345');
 
-    // Should mention improvement
-    expect(result.funFacts.some((fact) => fact.includes('faster'))).toBe(true);
+    // Should mention both Alice and Bob in the fastest solve fun fact
+    const fastestFact = result.funFacts.find((fact) => fact.includes('Fastest solve'));
+    expect(fastestFact).toBeDefined();
+    expect(fastestFact).toContain('Alice');
+    expect(fastestFact).toContain('Bob');
+    expect(fastestFact).toContain('and'); // Should use "and" for two names
+    expect(fastestFact).not.toContain('Carol');
   });
 
   it('handles no solves in current week', async () => {
@@ -326,14 +323,14 @@ describe('formatSummaryMessage', () => {
         totalSolves: 0,
         averageTime: 0,
       },
-      funFacts: ['Fastest solve: 1:00 by Alice', 'Group is 30s faster than last week! 🚀'],
+      funFacts: ['Fastest solve: 1:00 by Alice', '5 people have solved this week!'],
     };
 
     const message = formatSummaryMessage(summary);
 
     expect(message).toContain('Fun Facts:');
     expect(message).toContain('Fastest solve: 1:00 by Alice');
-    expect(message).toContain('Group is 30s faster than last week! 🚀');
+    expect(message).toContain('5 people have solved this week!');
   });
 
   it('handles no solves gracefully', () => {

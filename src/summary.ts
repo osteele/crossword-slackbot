@@ -147,21 +147,20 @@ export async function generateWeeklySummary(
 
   if (times.length > 0) {
     const fastestTime = Math.min(...times);
-    const fastestSolver = currentWeekData.find((s) => s.totalSeconds === fastestTime);
-    if (fastestSolver) {
-      funFacts.push(`Fastest solve: ${formatTime(fastestTime)} by ${fastestSolver.userName}`);
-    }
-
-    // Check for speed improvements
-    if (lastWeekAvg > 0) {
-      const improvement = lastWeekAvg - avgTime;
-      if (improvement > 5) {
-        funFacts.push(`Group is ${Math.round(improvement)}s faster than last week! 🚀`);
-      } else if (improvement < -5) {
-        funFacts.push(
-          `Puzzles were trickier this week (+${Math.round(Math.abs(improvement))}s average)`
-        );
-      }
+    // Find all solvers with the fastest time (handle ties)
+    const fastestSolvers = currentWeekData
+      .filter((s) => s.totalSeconds === fastestTime)
+      .map((s) => s.userName);
+    // Deduplicate names in case same person had multiple fastest solves
+    const uniqueFastestSolvers = [...new Set(fastestSolvers)];
+    if (uniqueFastestSolvers.length > 0) {
+      const solverNames =
+        uniqueFastestSolvers.length === 1
+          ? uniqueFastestSolvers[0]
+          : uniqueFastestSolvers.length === 2
+            ? uniqueFastestSolvers.join(' and ')
+            : `${uniqueFastestSolvers.slice(0, -1).join(', ')}, and ${uniqueFastestSolvers[uniqueFastestSolvers.length - 1]}`;
+      funFacts.push(`Fastest solve: ${formatTime(fastestTime)} by ${solverNames}`);
     }
 
     // Participation fact
