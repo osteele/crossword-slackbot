@@ -145,6 +145,39 @@ describe('generateWeeklySummary', () => {
     expect(fastestFact).not.toContain('Carol');
   });
 
+  it('handles 3+ way ties with Oxford comma', async () => {
+    mockClient.conversations.history.mockResolvedValue({
+      messages: [mockDateHeader('Mon 11/4', '1699084800.000000')],
+    });
+
+    mockClient.conversations.replies.mockResolvedValue({
+      messages: [
+        mockDateHeader('Mon 11/4', '1699084800.000000'),
+        mockMessage('0:25', 'U001', '1699084900.000000'), // Tied fastest
+        mockMessage('0:25', 'U002', '1699085000.000000'), // Tied fastest
+        mockMessage('0:25', 'U003', '1699085100.000000'), // Tied fastest
+        mockMessage('1:00', 'U004', '1699085200.000000'), // Not fastest
+      ],
+    });
+
+    mockClient.users.info
+      .mockResolvedValueOnce(mockUserInfo('U001', 'Alice'))
+      .mockResolvedValueOnce(mockUserInfo('U002', 'Bob'))
+      .mockResolvedValueOnce(mockUserInfo('U003', 'Carol'))
+      .mockResolvedValueOnce(mockUserInfo('U004', 'Dave'));
+
+    const result = await generateWeeklySummary(mockClient as any, 'C12345');
+
+    // Should format as "Alice, Bob, and Carol" with Oxford comma
+    const fastestFact = result.funFacts.find((fact) => fact.includes('Fastest solve'));
+    expect(fastestFact).toBeDefined();
+    expect(fastestFact).toContain('Alice');
+    expect(fastestFact).toContain('Bob');
+    expect(fastestFact).toContain('Carol');
+    expect(fastestFact).toContain(', and'); // Oxford comma before "and"
+    expect(fastestFact).not.toContain('Dave');
+  });
+
   it('handles no solves in current week', async () => {
     mockClient.conversations.history.mockResolvedValue({
       messages: [],
