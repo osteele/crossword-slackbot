@@ -200,7 +200,5 @@ export function formatLeaderboardMessage(stats: WeekStats): string {
     }
   }
 
-  message += `\n_${stats.totalSolves} total solves from ${stats.participantCount} solver${stats.participantCount === 1 ? '' : 's'}_`;
-
   return message;
 }
